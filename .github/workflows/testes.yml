@@ -1,0 +1,94 @@
+name: Testes
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.12"
+  OLLAMA_MODEL: "qwen2.5:7b"
+  # API do professor, fixada num commit para uma mudança lá não quebrar estes testes sem aviso
+  API_ESTOQUE_REPO: wangsouza/api-estoque
+  API_ESTOQUE_REF: 72187d9afdb23c9f972485b456f57876a1146672
+
+jobs:
+  unitarios-e-integracao:
+    name: Unitários e integração (sem LLM)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Baixar a API de estoque
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.API_ESTOQUE_REPO }}
+          ref: ${{ env.API_ESTOQUE_REF }}
+          path: api-estoque
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Rodar testes
+        env:
+          API_ESTOQUE_DIR: ${{ github.workspace }}/api-estoque
+        run: pytest -m "not ollama" -v
+
+  e2e-ollama:
+    name: Ponta a ponta (Ollama real)
+    needs: unitarios-e-integracao   # só gasta tempo com o modelo se os testes rápidos passarem
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      ollama:
+        image: ollama/ollama:latest
+        ports:
+          - 11434:11434
+        options: >-
+          --health-cmd "ollama list"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Baixar a API de estoque
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.API_ESTOQUE_REPO }}
+          ref: ${{ env.API_ESTOQUE_REF }}
+          path: api-estoque
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Baixar o modelo (cerca de 4,7 GB)
+        run: |
+          curl -sSf http://localhost:11434/api/pull \
+            -d "{\"model\": \"$OLLAMA_MODEL\", \"stream\": false}"
+
+      - name: Aquecer o modelo
+        # A primeira chamada carrega o modelo na memória; sem isso o primeiro teste pode estourar o timeout
+        run: |
+          curl -sSf http://localhost:11434/api/generate \
+            -d "{\"model\": \"$OLLAMA_MODEL\", \"prompt\": \"ok\", \"stream\": false}" > /dev/null
+
+      - name: Conferir que o modelo está disponível
+        # Os testes são pulados se o modelo faltar; aqui a ausência vira falha, não um "passou" falso
+        run: curl -sSf http://localhost:11434/api/tags | grep -q "\"name\":\"$OLLAMA_MODEL\""
+
+      - name: Rodar testes ponta a ponta
+        env:
+          API_ESTOQUE_DIR: ${{ github.workspace }}/api-estoque
+        run: pytest -m ollama -v -rs
