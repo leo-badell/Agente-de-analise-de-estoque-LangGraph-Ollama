@@ -1,0 +1,20 @@
+# n8n local (gratuito, sem conta no site). Subir: docker compose up -d  |  Parar: docker compose down
+# Editor em http://localhost:5678. Workflows, conta local e execuções ficam no volume n8n_data.
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.49.8  # versão fixa: testada com este projeto
+    ports:
+      - "5678:5678"
+    environment:
+      - GENERIC_TIMEZONE=America/Sao_Paulo
+      - TZ=America/Sao_Paulo
+      # Uso 100% local: sem telemetria, avisos de versão e templates (evita erros de certificado em rede corporativa)
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+      - N8N_TEMPLATES_ENABLED=false
+    volumes:
+      - n8n_data:/home/node/.n8n
+    restart: unless-stopped
+
+volumes:
+  n8n_data:

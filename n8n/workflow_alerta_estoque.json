@@ -1,0 +1,202 @@
+{
+  "name": "Alerta de estoque",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "estoque-resultado",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "e560a304-5d74-4a84-9c1c-e37e3e1083a5",
+      "name": "Webhook",
+      "webhookId": "5dfb21ff-50bf-4263-9ff6-024676511529"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "88a512dc-0a00-4557-8555-786e30772896",
+              "leftValue": "={{ $json.body.situacao }}",
+              "rightValue": "baixo",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "46087f56-420c-472b-a1f6-d058d2bd17a0",
+              "leftValue": "={{ $json.body.situacao }}",
+              "rightValue": "=esgotado",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        224,
+        0
+      ],
+      "id": "272f4d0c-fa8f-497c-8b5f-5ac3e82a9474",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bd266e9e-f430-4bc7-87dc-7b67dcb39ff5",
+              "name": "alerta",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "114a35d9-32c4-4cd9-ae43-92db78d6e70a",
+              "name": "mensagem",
+              "value": "=Repor o produto {{ $json.body.codigo }}: situação {{ $json.body.situacao }}.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        560,
+        -144
+      ],
+      "id": "704d4ca3-3826-49bb-bbc8-f226c53d1ed4",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "4d04a3ed-ad3c-4712-8230-8a976526613d",
+              "name": "alerta",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "2ad998a4-bc1a-4cbb-bac9-585283ff0388",
+              "name": "mensagem",
+              "value": "Sem necessidade de reposição",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        560,
+        112
+      ],
+      "id": "012aa0cc-a0dc-42fc-9e73-144eddb80428",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        784,
+        -144
+      ],
+      "id": "055fabba-a7e6-47d7-ad97-35778a9f60b8",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "5a9c74c9-0f5a-49f7-b7c5-9a0979beccc8",
+  "meta": {
+    "instanceId": "1129d6c3575979c63ab4d2f208d1abd1dbf547bc4f03a25edb8783825450052c"
+  },
+  "nodeGroups": [],
+  "id": "OfqlYAQuoHXodQ5V",
+  "tags": []
+}

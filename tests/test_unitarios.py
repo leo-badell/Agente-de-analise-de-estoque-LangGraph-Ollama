@@ -169,3 +169,31 @@ def test_responder_usa_resumo_fixo_se_llm_falhar(llm_falso):
 def test_perguntar_recusa_entrada_invalida(pergunta):
     assert agente.perguntar(pergunta) == {}
     assert agente.classificador.chamadas == []
+
+
+# --- Integração com o n8n -----------------------------------------------------
+
+ESTADO_BAIXO = {"pergunta": "Tem PRD-001?", "intencao": "consultar_produto", "codigo": "PRD-001",
+                "situacao": "baixo", "resposta": "..."}
+
+
+def test_n8n_desligado_sem_url_nao_faz_post(monkeypatch):
+    chamadas = simular_http(monkeypatch, "post", httpx.Response(200, json={"alerta": True}))
+    assert agente.notificar_n8n(ESTADO_BAIXO) is None
+    assert chamadas == []
+
+
+def test_n8n_envia_resultado_e_devolve_alerta(monkeypatch):
+    monkeypatch.setattr(agente, "N8N_WEBHOOK_URL", "http://n8n-de-teste.invalid/webhook/estoque-resultado")
+    enviados = []
+    monkeypatch.setattr(httpx, "post", lambda url, json, timeout: enviados.append(json) or
+                        httpx.Response(200, json={"alerta": True, "mensagem": "Repor o produto PRD-001"}))
+    assert agente.notificar_n8n(ESTADO_BAIXO) == {"alerta": True, "mensagem": "Repor o produto PRD-001"}
+    assert enviados == [ESTADO_BAIXO]
+
+
+@pytest.mark.parametrize("resultado", [httpx.ConnectError("recusada"), httpx.Response(404, text="not found")])
+def test_n8n_fora_do_ar_nao_interrompe_agente(monkeypatch, resultado):
+    monkeypatch.setattr(agente, "N8N_WEBHOOK_URL", "http://n8n-de-teste.invalid/webhook/estoque-resultado")
+    simular_http(monkeypatch, "post", resultado)
+    assert agente.notificar_n8n(ESTADO_BAIXO) is None

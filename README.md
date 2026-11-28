@@ -57,6 +57,25 @@ Os prompts ficam em [agente.py](agente.py): `PROMPT_SISTEMA` (papel, objetivo, c
 
 `perguntar()` valida a entrada (1 a 500 caracteres), executa o grafo com `recursion_limit` (parada garantida mesmo se o fluxo mudar) e mostra o estado final, que serve como evidência. No cadastro, o grafo pausa para pedir ao humano os campos que faltarem e a confirmação (s/n).
 
+### Automação com n8n (alerta de reposição)
+
+Depois de cada análise, `perguntar()` envia o resultado ao n8n (`notificar_n8n()`), que decide se o produto precisa de reposição e devolve um alerta ao Python:
+
+```
+Python: perguntar() ── POST {pergunta, intencao, codigo, situacao, resposta} ──▶ n8n: Webhook
+                                                                                   │
+                                                          IF situacao = baixo OU esgotado
+                                                            ├─ sim → alerta: true  + mensagem de reposição
+                                                            └─ não → alerta: false
+                                                                                   │
+Python: imprime "n8n : {alerta, mensagem}" ◀──────────── resposta JSON ── Respond to Webhook
+```
+
+- A lógica do agente (LLM, estado e ferramentas) continua no LangGraph; o n8n só reage à situação já calculada em Python.
+- Integração opcional: sem `N8N_WEBHOOK_URL` no `.env`, nada é enviado. Se o n8n estiver fora do ar, o agente avisa e segue normalmente.
+- Cada chamada fica registrada na aba **Executions** do n8n.
+- Workflow exportado em [n8n/workflow_alerta_estoque.json](n8n/workflow_alerta_estoque.json).
+
 ## Estrutura
 
 | Caminho | Conteúdo |
@@ -64,6 +83,8 @@ Os prompts ficam em [agente.py](agente.py): `PROMPT_SISTEMA` (papel, objetivo, c
 | [agente.py](agente.py) | Código do agente: ferramentas, regra de situação, prompts, nós e grafo |
 | [notebooks/agente_estoque.ipynb](notebooks/agente_estoque.ipynb) | Explicação de cada parte e demonstração dos cenários (evidências) |
 | [tests/](tests) | Testes automatizados com pytest |
+| [n8n/workflow_alerta_estoque.json](n8n/workflow_alerta_estoque.json) | Workflow do n8n exportado (alerta de reposição) |
+| [docker-compose.yml](docker-compose.yml) | n8n local via Docker |
 
 ## Como executar
 
@@ -74,7 +95,11 @@ Com o ambiente virtual ativo (`.venv\Scripts\Activate.ps1`):
    python -m uvicorn app.main:app --app-dir ..\api-estoque --host 127.0.0.1 --port 8000
    ```
 2. Deixe o Ollama rodando com o modelo `qwen2.5:7b`.
-3. Abra o notebook e execute as células.
+3. (Opcional) Suba o n8n: `docker compose up -d` (editor em http://localhost:5678; a conta criada no primeiro acesso é local). Importe [n8n/workflow_alerta_estoque.json](n8n/workflow_alerta_estoque.json) (**Workflows → Import from File**), publique-o e adicione ao `.env`:
+   ```
+   N8N_WEBHOOK_URL=http://localhost:5678/webhook/estoque-resultado
+   ```
+4. Abra o notebook e execute as células.
 
 O cadastro (POST) grava no `data/produtos.json` do `api-estoque`. Para voltar aos 12 produtos originais antes de uma nova demonstração, na pasta `api-estoque`: `python scripts/reset_data.py`.
 
@@ -87,7 +112,7 @@ pytest -m "not ollama"  # só os rápidos, sem LLM
 
 | Arquivo | Tipo | O que cobre |
 |---|---|---|
-| `tests/test_unitarios.py` | Unitário (HTTP e LLM simulados) | Regra de situação nos limites, validação do cadastro, tratamento de cada falha das ferramentas, rotas do grafo, regex do código, filtro contra valores inventados, mensagens fixas e entrada inválida |
+| `tests/test_unitarios.py` | Unitário (HTTP e LLM simulados) | Regra de situação nos limites, validação do cadastro, tratamento de cada falha das ferramentas, rotas do grafo, regex do código, filtro contra valores inventados, mensagens fixas, entrada inválida e envio ao n8n (alerta devolvido, n8n desligado ou fora do ar) |
 | `tests/test_integracao.py` | Integração (API real em memória, LLM simulado) | Ferramentas contra a API (200, 404, 503, 201, 409) e o grafo completo: classificação, confirmação humana (sem "s" não há POST), pedido de campos faltantes e dados inválidos encerrando antes da confirmação |
 | `tests/test_ollama.py` | Ponta a ponta (Ollama real, API em memória) | Os 3 cenários pedidos: produto existente, produto inexistente e pergunta conceitual sem chamar a API. Pulados se o Ollama estiver fora do ar |
 

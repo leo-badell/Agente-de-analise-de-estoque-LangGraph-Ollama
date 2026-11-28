@@ -372,6 +372,27 @@ agente = grafo.compile(checkpointer=InMemorySaver())  # o checkpointer permite p
 
 
 LIMITE_PERGUNTA = 500
+N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL")  # vazia = integração com o n8n desligada
+
+
+def notificar_n8n(estado: Estado) -> Optional[dict]:
+    """Envia o resultado da análise ao workflow do n8n e devolve a resposta dele (alerta de reposição).
+
+    Falha do n8n não interrompe o agente: só avisa e retorna None.
+    """
+    if not N8N_WEBHOOK_URL:
+        return None
+    dados = {c: estado.get(c) for c in ("pergunta", "intencao", "codigo", "situacao", "resposta")}
+    try:
+        r = httpx.post(N8N_WEBHOOK_URL, json=dados, timeout=5)
+    except httpx.HTTPError as e:
+        print(f"[n8n] não foi possível notificar o workflow: {e}")
+        return None
+    corpo = _corpo_json(r)
+    if r.status_code != 200 or not corpo:
+        print(f"[n8n] resposta inesperada do workflow (HTTP {r.status_code}).")
+        return None
+    return corpo
 
 
 def perguntar(pergunta: str, respostas: Optional[list] = None) -> Estado:
@@ -392,4 +413,7 @@ def perguntar(pergunta: str, respostas: Optional[list] = None) -> Estado:
     print(f"Intenção : {estado.get('intencao')} | código: {estado.get('codigo')} | situação: {estado.get('situacao')}")
     print(f"API      : {estado.get('resultado', 'não consultada')}")
     print(f"Resposta : {estado['resposta']}\n")
+    retorno = notificar_n8n(estado)
+    if retorno:
+        print(f"n8n      : {retorno}\n")
     return estado
