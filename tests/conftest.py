@@ -37,6 +37,7 @@ class LLMFalso:
 def isolamento(request, monkeypatch):
     # Chamada HTTP não simulada falha (host inexistente) em vez de atingir a API real
     monkeypatch.setattr(agente, "API_URL", "http://api-de-teste.invalid")
+    monkeypatch.setattr(agente, "N8N_WEBHOOK_URL", None)  # o .env local não liga o n8n nos testes
     if request.node.get_closest_marker("ollama") is None:
         for nome in ("llm", "classificador", "extrator"):
             monkeypatch.setattr(agente, nome, LLMFalso())
